@@ -27,6 +27,7 @@
  */
 #include "com_config.h"
 #include "topics.h"
+#include "xbox.h"
 
 extern Motor_C610 m2006[1];
 
@@ -53,10 +54,23 @@ extern VESC vesc[3];
 
 extern DM_motor dm[1];
 
+extern XBOX_Instance_t *XBOX_Instance;
+extern Uart_Instance_t *xbox_uart_instance;
+extern uart_package_t xbox_uart_package;
+
 uint8_t Common_Service_Init() {
   CAN1_TxPort = xQueueCreate(16, sizeof(CAN_Tx_Instance_t));
   CAN2_TxPort = xQueueCreate(16, sizeof(CAN_Tx_Instance_t));
   SubPub_Init(); // 话题订阅机制开启
+  xbox_uart_instance = Uart_Register(&xbox_uart_package);
+  if (xbox_uart_instance == NULL) {
+    LOGERROR("xbox uart instance is not prepared!");
+    vTaskDelete(NULL);
+  }
+  if (Xbox_Init(xbox_uart_instance) == 0) {
+
+    LOGERROR("xbox init failed!");
+  }
 
   return 1;
 }

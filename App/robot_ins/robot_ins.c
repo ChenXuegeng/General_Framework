@@ -116,7 +116,8 @@ __attribute((noreturn)) void ins_Task(void *argument)
 {
     portTickType currentTime;
     currentTime = xTaskGetTickCount();
-
+    
+    #ifdef USE_ACTION
     /* 串口实例注册 */
     uart_package_t action_package = {
         .uart_handle = &huart4,
@@ -215,6 +216,69 @@ __attribute((noreturn)) void ins_Task(void *argument)
         }
         vTaskDelayUntil(&currentTime,1);
     }
+    #endif
+
+    #ifdef USE_HWT101CT
+    /* 串口实例注册 */
+    uart_package_t hwt_uart_package = {
+        .uart_handle = &huart4,
+        .use_static_length_data = 1,
+        .rx_buffer = rx_buffer,
+        .rx_buffer_size = HWT101CT_DATA_NUM,
+        .uart_callback = HWT_RxCallback_Fun,
+    }; // 配置 UART 包
+    Uart_Instance_t *hwt_uart_instance = Uart_Register(&hwt_uart_package);
+    if (hwt_uart_instance == NULL)
+    {
+        /* 如果 HWT101CT 设备创建失败，就删除本 task，防止占用 CPU */
+        LOGWARNING("UART register failed!");
+        vTaskDelete(NULL);
+    }
+    
+    /* HWT101CT 设备注册流程 */
+    HWT_Instance_t *hwt_instance = HWT_Init(hwt_uart_instance, 20); // 设定 HWT101CT 队列长度为 20
+    if (hwt_instance == NULL)
+    {
+        /* 如果 HWT101CT 设备初始化失败，就删除本 task，防止占用 CPU */
+        LOGWARNING("HWT101CT device init failed!");
+        vTaskDelete(NULL);
+    }
+    
+    /* 创建实例完毕，开始进入接收 task */
+    hwt_instance->rtos_for_hwt->queue_receive = xQueueReceive; // 确保队列接收函数已挂载
+    
+    float last_yaw = 0.0f;
+    publish_data p_hwt_imu_data; // 发布姿态角数据
+    
+    ins_interface.imu_data = (pub_imu_yaw *)pvPortMalloc(sizeof(pub_imu_yaw));
+    assert_param(ins_interface.imu_data != NULL);
+    
+    ins_interface.chassis_imu_pub = register_pub("chassis_imu_pub");
+    
+    for (;;)
+    {
+        LOGINFO("HWT101CT_SensorTask is running!");
+    
+        /* 调用 HWT101CT 设备中读数据的函数 */
+        if (hwt_instance != NULL)
+        {
+            ins_interface.dt = DWT_GetDeltaT(&ins_interface.DWT_CNT);
+            hwt_instance->hwt_task(hwt_instance);
+    
+            /* 发布姿态角数据 */
+            ins_interface.imu_data->yaw = -((float)((hwt_instance->hwt_msgs->YawH << 8) | hwt_instance->hwt_msgs->YawL) / 32768.0f) * 180.0f;
+            p_hwt_imu_data.data = (uint8_t *)(ins_interface.imu_data);
+            p_hwt_imu_data.len = sizeof(pub_imu_yaw);
+            ins_interface.chassis_imu_pub->publish(ins_interface.chassis_imu_pub, p_hwt_imu_data);
+    
+            /* 更新上一次的偏航角 */
+            last_yaw = ins_interface.imu_data->yaw;
+        }
+    
+        vTaskDelayUntil(&currentTime, 1);
+    }
+    
+    #endif
 }
 
 

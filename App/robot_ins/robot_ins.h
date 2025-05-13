@@ -28,6 +28,7 @@
 #include "soft_iwdg.h"
 #include "topics.h"
 #include "motor_base.h"
+#include "HWT101CT.h"
 /* app层接口 */
 #include "data_pool.h"
 

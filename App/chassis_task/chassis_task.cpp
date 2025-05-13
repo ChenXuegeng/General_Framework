@@ -527,11 +527,17 @@ Subscriber *motor_pid_sub;
 pub_vofa_pid pid_data;
 #endif
 
-#ifdef USE_AIRJOY_CONTROL
+#if defined(USE_AIRJOY_CONTROL) || defined(XBOX_CONTROL)
 /* 接收航模遥控控制信息 */
 Subscriber *ctrl_data_sub;
 pub_Control_Data twist;
 #endif
+
+// #ifdef USE_XBOX_CONTROL
+// /* 接收xbox控制信息 */
+// Subscriber *ctrl_data_sub;
+// pub_Control_Data xbox_twist;
+// #endif
 
 #ifdef TRY_AUTO_CONTROL
 Subscriber *ros_serial_sub;
@@ -617,10 +623,16 @@ uint8_t Chassis_Init() {
   /* 底盘订阅机制初始化 */
   User_Chassis.Chassis_Subscribe_Init();
 
-#ifdef USE_AIRJOY_CONTROL
+  #if defined(USE_AIRJOY_CONTROL) || defined(XBOX_CONTROL)
   /* 遥控器 订阅者准备 */
   ctrl_data_sub = register_sub("ctrl_pub", 1);
 #endif
+
+
+// #ifdef USE_XBOX_CONTROL
+//   /* xbox控制器 订阅者准备 */
+//   ctrl_data_sub = register_sub("ctrl_pub", 1);
+// #endif
 
 #ifdef TRY_AUTO_CONTROL
   ros_serial_sub = register_sub("ros_serial_pub", 1);
@@ -667,7 +679,101 @@ __attribute((noreturn)) void Chassis_Task(void *argument) {
     }
 #endif
 
-#ifdef USE_AIRJOY_CONTROL
+// #ifdef USE_AIRJOY_CONTROL
+//     /* 接收航模遥控数据 */
+//     temp_data = ctrl_data_sub->getdata(ctrl_data_sub);
+//     if (temp_data.len != -1) {
+//       twist = *(pub_Control_Data *)temp_data.data;
+//       User_Chassis.Chassis_Status = (Chassis_Status_e)twist.Status;
+//       User_Chassis.Moving_Status = (Moving_Status_e)twist.Move;
+//       User_Chassis.Control_Status = (Control_Status_e)twist.ctrl;
+//       switch (User_Chassis.Chassis_Status) {
+//       case ROBOT_CHASSIS: {
+//         User_Chassis.Ref_RoboSpeed.linear_x = twist.linear_x;
+//         User_Chassis.Ref_RoboSpeed.linear_y = twist.linear_y;
+//         User_Chassis.Ref_RoboSpeed.omega = twist.Omega;
+//         break;
+//       }
+//       case WORLD_CHASSIS: {
+//         User_Chassis.Ref_WorldSpeed.linear_x = twist.linear_x;
+//         User_Chassis.Ref_WorldSpeed.linear_y = twist.linear_y;
+//         User_Chassis.Ref_WorldSpeed.omega = twist.Omega;
+//         break;
+//       }
+//       default:
+//         break;
+//       }
+//       switch (User_Chassis.Moving_Status) {
+//       case FREE: {
+//         if (_keep_x == 1 || _keep_y == 1) {
+//           _keep_x = 0;
+//           _keep_y = 0;
+//           User_Chassis.Chassis_Reset_Output();
+//         }
+//         break;
+//       }
+//       case KEEP_X_MOVING: {
+//         _keep_y = 0;
+//         if (_keep_x == 0) {
+//           _current_angle = User_Chassis.imu_data->yaw;
+//           _keep_x = 1;
+//           User_Chassis.Chassis_Reset_Output();
+//         }
+//         Yaw_Adjust(&User_Chassis.Chassis_Yaw_Adjust, _current_angle,
+//                    User_Chassis.imu_data->yaw, -180, 180);
+//         User_Chassis.Ref_RoboSpeed.omega =
+//             User_Chassis.Chassis_Yaw_Adjust.Output;
+//         User_Chassis.Ref_WorldSpeed.omega =
+//             User_Chassis.Chassis_Yaw_Adjust.Output;
+//         User_Chassis.Ref_RoboSpeed.linear_y = 0;
+//         User_Chassis.Ref_WorldSpeed.linear_y = 0;
+//         break;
+//       }
+//       case KEEP_Y_MOVING: {
+//         _keep_x = 0;
+//         if (_keep_y == 0) {
+//           _current_angle = User_Chassis.imu_data->yaw;
+//           _keep_y = 1;
+//           User_Chassis.Chassis_Reset_Output();
+//         }
+//         Yaw_Adjust(&User_Chassis.Chassis_Yaw_Adjust, _current_angle,
+//                    User_Chassis.imu_data->yaw, -180, 180);
+//         User_Chassis.Ref_RoboSpeed.omega =
+//             User_Chassis.Chassis_Yaw_Adjust.Output;
+//         User_Chassis.Ref_WorldSpeed.omega =
+//             User_Chassis.Chassis_Yaw_Adjust.Output;
+//         User_Chassis.Ref_RoboSpeed.linear_x = 0;
+//         User_Chassis.Ref_WorldSpeed.linear_x = 0;
+//         break;
+//       }
+//       }
+//       switch (User_Chassis.Control_Status) {
+//       case HAND_CONTROL:
+//         /* 什么都不用做？ */
+//         break;
+//       case AUTO_CONTROL:
+
+//         /* 自动驾驶建立在机器人坐标系下运动 */
+//         User_Chassis.Chassis_Status = ROBOT_CHASSIS;
+//         User_Chassis.Moving_Status = FREE;
+
+//         /* 这里其实是指令的覆盖，就是说和你的航模遥控并不冲突，当你切手动时，航模遥控的设置会立即覆盖当前设置
+//          */
+//         /* 得将前面的速度指令全部换成ros_serial传下来的速度指令 */
+//         ros_serial_data = ros_serial_sub->getdata(ros_serial_sub);
+//         if (ros_serial_data.len != -1) {
+//           ros_twist = *(pub_Control_Data *)ros_serial_data.data;
+//           User_Chassis.Ref_RoboSpeed.linear_x = ros_twist.linear_x;
+//           User_Chassis.Ref_RoboSpeed.linear_y = ros_twist.linear_y;
+//           User_Chassis.Ref_RoboSpeed.omega = ros_twist.Omega;
+//         }
+//         break;
+//       }
+//     }
+// #endif
+
+
+#if defined(USE_AIRJOY_CONTROL) || defined(XBOX_CONTROL)
     /* 接收航模遥控数据 */
     temp_data = ctrl_data_sub->getdata(ctrl_data_sub);
     if (temp_data.len != -1) {
@@ -759,6 +865,97 @@ __attribute((noreturn)) void Chassis_Task(void *argument) {
       }
     }
 #endif
+
+// #ifdef USE_XBOX_CONTROL
+//  temp_data = ctrl_data_sub->getdata(ctrl_data_sub);
+// if (temp_data.len != -1) {
+//     xbox_twist = *(pub_Control_Data *)temp_data.data;
+//   User_Chassis.Chassis_Status = (Chassis_Status_e)xbox_twist.Status;
+//   User_Chassis.Moving_Status = (Moving_Status_e)xbox_twist.Move;
+//   User_Chassis.Control_Status = (Control_Status_e)xbox_twist.ctrl;
+//   switch (User_Chassis.Chassis_Status) {
+//   case ROBOT_CHASSIS: {
+//     User_Chassis.Ref_RoboSpeed.linear_x = xbox_twist.linear_x;
+//     User_Chassis.Ref_RoboSpeed.linear_y = xbox_twist.linear_y;
+//     User_Chassis.Ref_RoboSpeed.omega = xbox_twist.Omega;
+//     break;
+//   }
+//   case WORLD_CHASSIS: {
+//     User_Chassis.Ref_WorldSpeed.linear_x = xbox_twist.linear_x;
+//     User_Chassis.Ref_WorldSpeed.linear_y = xbox_twist.linear_y;
+//     User_Chassis.Ref_WorldSpeed.omega = xbox_twist.Omega;
+//     break;
+//   }
+//   default:
+//     break;
+//   }
+//   switch (User_Chassis.Moving_Status) {
+//   case FREE: {
+//     if (_keep_x == 1 || _keep_y == 1) {
+//       _keep_x = 0;
+//       _keep_y = 0;
+//       User_Chassis.Chassis_Reset_Output();
+//     }
+//     break;
+//   }
+//   case KEEP_X_MOVING: {
+//     _keep_y = 0;
+//     if (_keep_x == 0) {
+//       _current_angle = User_Chassis.imu_data->yaw;
+//       _keep_x = 1;
+//       User_Chassis.Chassis_Reset_Output();
+//     }
+//     Yaw_Adjust(&User_Chassis.Chassis_Yaw_Adjust, _current_angle,
+//                User_Chassis.imu_data->yaw, -180, 180);
+//     User_Chassis.Ref_RoboSpeed.omega =
+//         User_Chassis.Chassis_Yaw_Adjust.Output;
+//     User_Chassis.Ref_WorldSpeed.omega =
+//         User_Chassis.Chassis_Yaw_Adjust.Output;
+//     User_Chassis.Ref_RoboSpeed.linear_y = 0;
+//     User_Chassis.Ref_WorldSpeed.linear_y = 0;
+//     break;
+//   }
+//   case KEEP_Y_MOVING: {
+//     _keep_x = 0;
+//     if (_keep_y == 0) {
+//       _current_angle = User_Chassis.imu_data->yaw;
+//       _keep_y = 1;
+//       User_Chassis.Chassis_Reset_Output();
+//     }
+//     Yaw_Adjust(&User_Chassis.Chassis_Yaw_Adjust, _current_angle,
+//                User_Chassis.imu_data->yaw, -180, 180);
+//     User_Chassis.Ref_RoboSpeed.omega =
+//         User_Chassis.Chassis_Yaw_Adjust.Output;
+//     User_Chassis.Ref_WorldSpeed.omega =
+//         User_Chassis.Chassis_Yaw_Adjust.Output;
+//     User_Chassis.Ref_RoboSpeed.linear_x = 0;
+//     User_Chassis.Ref_WorldSpeed.linear_x = 0;
+//     break;
+//   }
+//   }
+//   switch (User_Chassis.Control_Status) {
+//   case HAND_CONTROL:
+//     /* 什么都不用做？ */
+//     break;
+//   case AUTO_CONTROL:
+//     /* 自动驾驶建立在机器人坐标系下运动 */
+//     User_Chassis.Chassis_Status = ROBOT_CHASSIS;
+//     User_Chassis.Moving_Status = FREE;
+//     /* 这里其实是指令的覆盖，就是说和你的航模遥控并不冲突，当你切手动时，航模遥控的设置会立即覆盖当前设置
+//      */
+//     /* 得将前面的速度指令全部换成ros_serial传下来的速度指令 */
+//     ros_serial_data = ros_serial_sub->getdata(ros_serial_sub);
+//     if (ros_serial_data.len != -1) {
+//       ros_twist = *(pub_Control_Data *)ros_serial_data.data;
+//       User_Chassis.Ref_RoboSpeed.linear_x = ros_twist.linear_x;
+//       User_Chassis.Ref_RoboSpeed.linear_y = ros_twist.linear_y;
+//       User_Chassis.Ref_RoboSpeed.omega = ros_twist.Omega;
+//     }
+//     break;
+//   }
+// }
+// #endif
+
     User_Chassis.Chassis_Parking_Control(); // 长时间未控制时自动进入驻车模式
     Chassis();
     vTaskDelayUntil(&currentTime, 1);

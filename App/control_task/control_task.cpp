@@ -30,6 +30,10 @@ pub_Control_Data ctrl_data;
 Subscriber *air_joy_sub;
 pub_air_joy_data air_joy_data;
 
+/* 订阅xbox手柄数据 */
+Subscriber *xbox_data_sub;
+pub_Xbox_Data xbox_chassis_data;
+
 /* 是否使用梯形曲线处理遥杆数据 */
 uint8_t if_use_trapezoidal = 0;
 
@@ -111,6 +115,23 @@ void Air_Joy_Process()
 
 
 
+void Xbox_Data_Process()
+{
+    if(xbox_chassis_data.joyLHori -32768 >2000 || xbox_chassis_data.joyLHori - 32768 < -2000)ctrl_data.linear_x = -(xbox_chassis_data.joyLHori - 32767) / 32767.0f * MAX_VELOCITY;
+  else ctrl_data.linear_x = 0;
+
+  if(xbox_chassis_data.joyLVert -32768 >2000 || xbox_chassis_data.joyLVert - 32768 < -2000)ctrl_data.linear_y = -(xbox_chassis_data.joyLVert - 32767) / 32767.0f * MAX_VELOCITY;
+  else ctrl_data.linear_y = 0;
+
+  if(xbox_chassis_data.joyRHori -32768 >2000 || xbox_chassis_data.joyRHori - 32768 < -2000)ctrl_data.Omega = (xbox_chassis_data.joyRHori - 32767) / 32767.0f * MAX_VELOCITY;
+  else ctrl_data.Omega = 0;
+    // ctrl_data.linear_x=(int)(xbox_chassis_data.joyLHori- 32767)/ 32767.0f * MAX_VELOCITY;
+    // ctrl_data.linear_y=(int)(xbox_chassis_data.joyLVert - 32767)/ 32767.0f * MAX_VELOCITY;
+    // ctrl_data.Omega =  (int)(xbox_chassis_data.joyRHori - 32767)/ 32767.0f * MAX_VELOCITY;
+    ctrl_data.Status = 1;
+    ctrl_data.Move =0;
+    ctrl_data.ctrl = 0;
+}
 
 
 __attribute((noreturn)) void Control_Task(void *argument)
@@ -119,7 +140,7 @@ __attribute((noreturn)) void Control_Task(void *argument)
     portTickType currentTime;
     currentTime = xTaskGetTickCount();
     /* 机器人控制接口，这里选用航模遥控 */
-    #ifdef USE_AIRJOY_CONTROL
+#ifdef USE_AIRJOY_CONTROL
 
 
     /* 航模遥控 */
@@ -152,19 +173,41 @@ __attribute((noreturn)) void Control_Task(void *argument)
         }
         vTaskDelayUntil(&currentTime,2);
     }
+
+
 #elif XBOX_CONTROL
-    xbox_uart_instance = Uart_Register(&xbox_uart_package);
-    if(xbox_uart_instance == NULL)
-    {
-        LOGERROR("xbox uart_instance is not prepared!");
-        vTaskDelete(NULL);
-    }
-    if(Xbox_Init(xbox_uart_instance)==0)
-    {
-        LOGERROR("xbox init failed!");
+    publish_data xbox_data;
+    xbox_data_sub = register_sub("xbox", 1);
+
+    ctrl_pub = register_pub("ctrl_pub");
+    publish_data temp_ctrl_data;
+
+    for(;;)
+     {
+        xbox_data = xbox_data_sub->getdata(xbox_data_sub);
+        if(xbox_data.len != -1)
+        {
+            xbox_chassis_data = *(pub_Xbox_Data*)xbox_data.data;
+            Xbox_Data_Process();
+            temp_ctrl_data.data = (uint8_t*)&ctrl_data;
+            temp_ctrl_data.len = sizeof(pub_Control_Data);
+            ctrl_pub->publish(ctrl_pub,temp_ctrl_data);
+        }
+        vTaskDelayUntil(&currentTime,2);
     }
     
-    vTaskDelete(NULL);//xbox初始化完这个任务就能删了
+    // xbox_uart_instance = Uart_Register(&xbox_uart_package);
+    // if(xbox_uart_instance == NULL)
+    // {
+    //     LOGERROR("xbox uart_instance is not prepared!");
+    //     vTaskDelete(NULL);
+    // }
+    // if(Xbox_Init(xbox_uart_instance)==0)
+    // {
+    //     LOGERROR("xbox init failed!");
+    // }
+    
+    // vTaskDelete(NULL);//xbox初始化完这个任务就能删了
     
 #else
     LOGERROR("NO CONTROL METHOD SELECTED!");

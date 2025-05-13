@@ -136,6 +136,7 @@ float wheel_v = 0;
 float ref = 0;
 
 #ifdef DEBUG_GO1_MOTOR
+
 extern uint8_t have_start;
 
 CAN_Rx_Instance_t go1_rx_instance = {
@@ -157,6 +158,28 @@ Motor_Control_Setting_t go1_motor_ctrl = {0};
 // 较为特殊的go1电机，有些选项不需要配置！
 GO_M8010 go1_motor[1] = {
     GO_M8010(0, go1_rx_instance, go1_tx_instance, go1_motor_ctrl, 0, -1, 3)};
+
+void UpdateTargetPosition(float &current_pos, float target_pos, float max_speed,  float max_acc, float dt) {
+    float distance = target_pos - current_pos;
+
+    if (fabs(distance) < 0.001) { // 如果距离小于阈值，直接跳出函数
+        current_pos = target_pos; 
+        return;
+    }
+
+    float desired_speed = sqrt(2 * max_acc * fabs(distance));   // 计算期望速度
+    if (desired_speed > max_speed) {
+        desired_speed = max_speed;
+    }
+
+    float delta_pos = desired_speed * dt;// 计算位置增量
+    if (fabs(delta_pos) > fabs(distance)) {
+        delta_pos = distance; 
+    }
+
+    current_pos += delta_pos;// 更新当前位置
+}
+
 #endif
 
 #ifdef TEST_SYSTEM_TURNER
@@ -172,13 +195,14 @@ float speed_aps = 0;
 
 #ifdef DEBUG_GO1_MOTOR
 float debug_pos = 0.5;
-float debug_kp = 0.15;
-float debug_kd = 0.02;
+float debug_kp = 3;
+float debug_kd = 0.08;
 float debug_spe = 0;
 float go1_cur_pos = 0;
 float go1_cur_spe = 0;
 #endif
-
+extern float real_pos;
+extern void ProcessGoAngle(float current_pos_);
 __attribute((noreturn)) void Debug_Task(void *argument) {
   // portTickType currentTime;
   // currentTime = xTaskGetTickCount();
@@ -205,7 +229,7 @@ __attribute((noreturn)) void Debug_Task(void *argument) {
   go1_motor[0].GO_Motor_No_Tarque_Ctrl();
   if (!have_start)
     vTaskDelay(5);
-  go1_cur_pos = go1_motor[0].real_cur_data.Pos;
+  go1_cur_pos = go1_motor[0].real_cur_data.Pos;//记录为初始位置
   go1_cur_spe = go1_motor[0].real_cur_data.W;
   debug_pos = go1_cur_pos;
   debug_spe = go1_cur_spe;
@@ -303,15 +327,32 @@ __attribute((noreturn)) void Debug_Task(void *argument) {
 #endif
 
 #ifdef DEBUG_GO1_MOTOR
-    if (xbox_data_pub.btnDirUp) {
-      debug_pos += 0.005;
-      go1_motor[0].GO_Motor_Pos_Ctrl(debug_pos, debug_kp, debug_kd);
-    } else if (xbox_data_pub.btnDirDown) {
-      debug_pos -= 0.005;
-      go1_motor[0].GO_Motor_Pos_Ctrl(debug_pos, debug_kp, debug_kd);
-    } else if (xbox_data_pub.btnB) {
+
+    if (xbox_data_pub.btnDirUp)
+    {
+      debug_pos = go1_cur_pos + 2.91;
+    }
+    if (xbox_data_pub.btnDirDown)
+    {
+      debug_pos = go1_cur_pos + 0.05;
+    }
+    if (xbox_data_pub.btnB) {
       go1_motor->stop_the_motor();
     }
+    if (ABS(debug_pos - go1_motor[0].real_cur_data.Pos) > 0.3)
+      {
+         debug_kp = 0.15;
+         debug_kd =0.02;
+         go1_motor[0].GO_Motor_Pos_Ctrl(debug_pos, debug_kp, debug_kd);
+      }
+      else{
+      debug_kp = 3;
+      debug_kd =0.08;
+      go1_motor[0].GO_Motor_Pos_Ctrl(debug_pos, debug_kp, debug_kd);
+      }
+
+
+
 
     // if (debug <= 5000 || debug >= 10000) {
     // go1_motor[0].GO_Motor_Speed_Ctrl(5, 0.05);
@@ -324,6 +365,11 @@ __attribute((noreturn)) void Debug_Task(void *argument) {
     // }
 #endif
     // vTaskDelayUntil(&currentTime, 1);
-    vTaskDelay(5);
+     vTaskDelay(5);
+//     Omni_Chassis User_Chassis(4, WHEEL_R, CHASSIS_R);
+//     User_Chassis.Chassis_Status = ROBOT_CHASSIS;
+//     User_Chassis.Moving_Status = FREE;
+
+    
   }
 }
